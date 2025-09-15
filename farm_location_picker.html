@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Farm Location Picker (Satellite + GPS)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 500px; width: 100%; }
+  </style>
+</head>
+<body>
+
+<h2>Select Your Farm Location</h2>
+<div id="map"></div>
+<p id="coords">Fetching your current location...</p>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  var map = L.map('map').setView([20.5937, 78.9629], 5); // Default India center
+  var marker;
+
+  // Esri Satellite layer
+  L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+    { attribution: 'Tiles © Esri' }
+  ).addTo(map);
+
+  // Esri labels overlay
+  L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Labels © Esri', pane: 'overlayPane' }
+  ).addTo(map);
+
+  // Function to fetch address from Positionstack
+  function getAddress(lat, lon) {
+  const apiKey = "YOUR_POSITIONSTACK_API_KEY"; // 🔑 Replace with your key
+  const url = `http://api.positionstack.com/v1/reverse?access_key=${apiKey}&query=${lat},${lon}`;
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      let place = "Unknown";
+      if (data && data.data && data.data.length > 0) {
+        place = data.data[0].label;
+      }
+      document.getElementById("coords").innerText =
+        `Selected Location: Latitude ${lat}, Longitude ${lon}\nAddress: ${place}`;
+    })
+    .catch(err => {
+      console.error(err);
+      document.getElementById("coords").innerText =
+        `Selected Location: Latitude ${lat}, Longitude ${lon}\n(Address fetch failed)`;
+    });
+}
+
+  // Function to update marker and fetch address
+  function setMarker(lat, lon) {
+    if (marker) map.removeLayer(marker);
+    marker = L.marker([lat, lon]).addTo(map);
+    map.setView([lat, lon], 14); // Zoom closer
+    getAddress(lat, lon);
+  }
+
+  // Handle map click (manual selection)
+  map.on('click', function(e) {
+    var lat = e.latlng.lat.toFixed(6);
+    var lon = e.latlng.lng.toFixed(6);
+    setMarker(lat, lon);
+  });
+
+  // Try to get current location
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function(position) {
+        var lat = position.coords.latitude.toFixed(6);
+        var lon = position.coords.longitude.toFixed(6);
+        setMarker(lat, lon);
+      },
+      function() {
+        document.getElementById("coords").innerText =
+          "Could not fetch your location. Please click on the map.";
+      }
+    );
+  } else {
+    document.getElementById("coords").innerText =
+      "Geolocation not supported. Please click on the map.";
+  }
+</script>
+
+</body>
+</html>
