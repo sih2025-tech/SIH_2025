@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🎤 Multi-Language Speech Detector</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* --- General --- */
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(to right, #1abc9c, #16a085); /* teal gradient */
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: #fff;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      font-size: 2.5rem;
+      text-shadow: 1px 1px 6px rgba(0,0,0,0.3);
+    }
+
+    .card {
+      background: #ffffff;
+      color: #333;
+      padding: 30px 25px;
+      border-radius: 16px;
+      box-shadow: 0 12px 25px rgba(0,0,0,0.15);
+      width: 500px;
+      max-width: 90%;
+      text-align: center;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 18px 35px rgba(0,0,0,0.25);
+    }
+
+    select {
+      padding: 10px 14px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      margin-bottom: 20px;
+      outline: none;
+      transition: all 0.3s ease;
+    }
+
+    select:focus {
+      border-color: #0072ff;
+      box-shadow: 0 0 8px rgba(0, 114, 255, 0.4);
+    }
+
+    button {
+      padding: 14px 25px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: bold;
+      margin: 10px 5px;
+    }
+
+    button.start {
+      background: linear-gradient(to right, #28a745, #218838);
+      color: #fff;
+    }
+
+    button.start:hover {
+      background: linear-gradient(to right, #218838, #1e7e34);
+    }
+
+    button.stop {
+      background: linear-gradient(to right, #dc3545, #c82333);
+      color: #fff;
+    }
+
+    button.stop:hover {
+      background: linear-gradient(to right, #c82333, #bd2130);
+    }
+
+    .result {
+      margin-top: 25px;
+      padding: 20px;
+      border-radius: 12px;
+      background: #e0f7fa; /* light teal background for results */
+      color: #00695c; /* dark teal text */
+      text-align: left;
+      font-size: 16px;
+      line-height: 1.6;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .result p strong {
+      color: #00796b; /* slightly darker teal for labels */
+    }
+
+    footer {
+      margin-top: 30px;
+      font-size: 14px;
+      color: rgba(255,255,255,0.8);
+    }
+  </style>
+</head>
+<body>
+  <h1>🎤 Multi-Language Speech Detector</h1>
+
+  <div class="card">
+    <p>Select a language, then click below and speak.</p>
+    <select id="languageSelect">
+      <option value="mr-IN">Marathi</option>
+      <option value="hi-IN">Hindi</option>
+      <option value="pa-IN">Punjabi</option>
+      <option value="ta-IN">Tamil</option>
+      <option value="te-IN">Telugu</option>
+      <option value="ml-IN">Malayalam</option>
+      <option value="en-IN">English</option>
+    </select><br>
+    <button id="startBtn" class="start">Start Recording</button>
+
+    <div class="result">
+      <p><strong>Text:</strong> <span id="text">---</span></p>
+      <p><strong>Detected Language:</strong> <span id="language">---</span></p>
+      <p><strong>Translated (English):</strong> <span id="translated">---</span></p>
+    </div>
+  </div>
+
+  <footer>Powered by Web Speech API & Flask Translate</footer>
+
+  <script>
+    const startBtn = document.getElementById("startBtn");
+    const textEl = document.getElementById("text");
+    const langEl = document.getElementById("language");
+    const translatedEl = document.getElementById("translated");
+    const languageSelect = document.getElementById("languageSelect");
+
+    let recognizing = false;
+    let recognition;
+
+    if ('webkitSpeechRecognition' in window) {
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        recognizing = true;
+        startBtn.textContent = "🎙️ Stop Recording";
+        startBtn.classList.remove("start");
+        startBtn.classList.add("stop");
+      };
+
+      recognition.onend = () => {
+        recognizing = false;
+        startBtn.textContent = "Start Recording";
+        startBtn.classList.remove("stop");
+        startBtn.classList.add("start");
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript.trim() + " ";
+        }
+        transcript = transcript.trim();
+        textEl.textContent = transcript;
+
+        const selectedLang = languageSelect.value;
+
+        // Show detected language
+        const langNames = {
+          "mr-IN": "Marathi",
+          "hi-IN": "Hindi",
+          "pa-IN": "Punjabi",
+          "ta-IN": "Tamil",
+          "te-IN": "Telugu",
+          "ml-IN": "Malayalam",
+          "en-IN": "English"
+        };
+        langEl.textContent = langNames[selectedLang] + ` (${selectedLang})`;
+
+        // Translate via Flask API
+        let langCode = selectedLang.split('-')[0];
+        if (langCode === 'en') {
+          translatedEl.textContent = transcript;
+        } else {
+            fetch("http://127.0.0.1:5000/translate", {
+                method: "POST",
+                body: JSON.stringify({ text: transcript, lang: langCode }),
+                headers: { "Content-Type": "application/json" }
+            })
+          .then(res => res.json())
+          .then(data => {
+            translatedEl.textContent = data.translatedText || "(Translation failed)";
+          })
+          .catch(err => {
+            console.error("Translation error:", err);
+            translatedEl.textContent = "(Translation error)";
+          });
+        }
+      };
+
+      // Start/Stop toggle
+      startBtn.addEventListener("click", () => {
+        if (recognizing) recognition.stop();
+        else {
+          recognition.lang = languageSelect.value;
+          recognition.start();
+        }
+      });
+
+    } else {
+      alert("Speech Recognition not supported in this browser.");
+    }
+  </script>
+</body>
+</html>
