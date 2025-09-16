@@ -748,28 +748,43 @@ maharashtra_coordinates = [
 
 ]
 
-# -------------------------------
-# Step 10: Main pipeline example — Train for all locations with one global model
-# -------------------------------
+# [All your previous functions here: initialize_gee, get_location, fetch_sentinel2, fetch_sentinel1,
+# calculate_slope_aspect_hillshade, fetch_dem_and_topo, fetch_nasa_power_with_lags,
+# merge_data_enhanced, classify_weather, ml_predict, fetch_complete_data...]
+
+# ----------
+
+# New snippet to calculate rainfall chance for past 10 days
+def rainfall_chance_past_days(df, model, feature_names, days=10, threshold=1.0):
+    today_str = datetime.datetime.today().strftime('%Y-%m-%d')
+    df['date'] = pd.to_datetime(df['date'])
+    past_start_date = pd.to_datetime(today_str) - pd.Timedelta(days=days)
+    mask = (df['date'] > past_start_date) & (df['date'] <= pd.to_datetime(today_str))
+    past_df = df.loc[mask].copy()
+    if past_df.empty:
+        print(f"⚠️ No data found for past {days} days to calculate rainfall chance.")
+        return
+    X_past = past_df.drop(columns=['date', 'predicted_rainfall', 'weather_condition'], errors='ignore')
+    X_past = X_past.reindex(columns=feature_names, fill_value=0)
+    preds = model.predict(X_past)
+    prob = np.mean(preds > threshold) * 100
+    print(f"\n🌧️ Chance of rainfall (> {threshold}mm) in past {days} days: {prob:.1f}%")
+
+# ----------
 
 if __name__ == "__main__":
     initialize_gee()
     today = datetime.datetime.today()
     start_date = (today - datetime.timedelta(days=5 * 365)).strftime('%Y-%m-%d')
     end_date = today.strftime('%Y-%m-%d')
-
     model_file = "india_global_model.pkl"
-
     if not os.path.exists(model_file):
         print("Training global model across all Maharashtra locations...")
-
         all_data = []
-
         def fetch_and_print(lat, lon):
             print(f"\nFetching data for lat: {lat}, lon: {lon}")
             df_loc = fetch_complete_data(lat, lon, start_date, end_date)
             return df_loc
-
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = {executor.submit(fetch_and_print, lat, lon): (lat, lon) for lat, lon in maharashtra_coordinates}
             for future in as_completed(futures):
@@ -780,19 +795,12 @@ if __name__ == "__main__":
                     print(f"✅ Data fetched for {lat}, {lon}")
                 except Exception as e:
                     print(f"❌ Failed to fetch for {lat}, {lon}: {e}")
-
         if all_data:
-            # Combine all location data into a single dataframe
             global_df = pd.concat(all_data, ignore_index=True)
-
-            # Ensure target column 'PRECTOTCORR' exists (important!)
             if 'PRECTOTCORR' not in global_df.columns and 'PRECTOT' in global_df.columns:
                 global_df['PRECTOTCORR'] = global_df['PRECTOT']
-
             print("Running ML training on concatenated global Maharashtra data...")
             stack_model = ml_predict(global_df)
-
-            # Save just one global model .pkl file
             joblib.dump(stack_model, model_file)
             print(f"✅ Global model saved to {model_file}")
         else:
@@ -802,63 +810,44 @@ if __name__ == "__main__":
         print(f"Loading saved global model from {model_file}...")
         stack_model = joblib.load(model_file)
         print("✅ Global model loaded successfully")
-
-    # Predict for user-input location
     lat, lon = get_location()
     print(f"\nFetching data for your location lat: {lat}, lon: {lon}")
-
     final_df = fetch_complete_data(lat, lon, start_date, end_date)
-
     feature_names = joblib.load("india_feature_names.pkl")
-
     def prepare_features(df):
         X = df.drop(columns=['date', 'predicted_rainfall', 'weather_condition'], errors='ignore')
         X = X.reindex(columns=feature_names, fill_value=0)
         return X
-
     features = prepare_features(final_df)
     final_df['predicted_rainfall'] = stack_model.predict(features)
 
-    # After predictions are added to final_df
+    # New addition: Calculate rainfall chance for past 10 days
+    rainfall_chance_past_days(final_df, stack_model, feature_names, days=10, threshold=1.0)
 
-if 'PRECTOTCORR' in final_df.columns and 'predicted_rainfall' in final_df.columns:
-    # Reorder columns: move PRECTOTCORR right before predicted_rainfall
-    cols = list(final_df.columns)
-    # Remove both columns from list
-    cols.remove('PRECTOTCORR')
-    cols.remove('predicted_rainfall')
-    # Insert PRECTOTCORR right before predicted_rainfall
-    idx = cols.index('predicted_rainfall') if 'predicted_rainfall' in cols else len(cols)
-    cols.insert(idx, 'PRECTOTCORR')
-    cols.insert(idx + 1, 'predicted_rainfall')
-    # Reorder dataframe
-    final_df = final_df[cols]
-
-
-
-    print("\n✅ Prediction for your location (first 10 rows):")
-    print(final_df.head(10))
+    if 'PRECTOTCORR' in final_df.columns and 'predicted_rainfall' in final_df.columns:
+        cols = list(final_df.columns)
+        cols.remove('PRECTOTCORR')
+        cols.remove('predicted_rainfall')
+        idx = cols.index('predicted_rainfall') if 'predicted_rainfall' in cols else len(cols)
+        cols.insert(idx, 'PRECTOTCORR')
+        cols.insert(idx + 1, 'predicted_rainfall')
+        final_df = final_df[cols]
+        print("\n✅ Prediction for your location (first 10 rows):")
+        print(final_df.head(10))
 
     if 'PRECTOTCORR' in final_df.columns:
         from sklearn.model_selection import train_test_split
         from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
         y = final_df['PRECTOTCORR'].values
         X = features.values
-
-        # Same 80/20 split as during training for evaluation
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
         y_train_pred = stack_model.predict(X_train)
         train_mae = mean_absolute_error(y_train, y_train_pred)
         train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
         train_r2 = r2_score(y_train, y_train_pred)
-
         y_test_pred = stack_model.predict(X_test)
         test_mae = mean_absolute_error(y_test, y_test_pred)
         test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred))
         test_r2 = r2_score(y_test, y_test_pred)
-
         print(f"\n✅ Training -> MAE: {train_mae:.3f}, RMSE: {train_rmse:.3f}, R²: {train_r2:.4f}")
         print(f"✅ Testing -> MAE: {test_mae:.3f}, RMSE: {test_rmse:.3f}, R²: {test_r2:.4f}")
-
