@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🎤 Multi-Language Speech Detector & Chatbot</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Roboto', sans-serif; background: linear-gradient(to right, #6a11cb, #2575fc); margin: 0; padding: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; flex-direction: column; color: #fff; }
+    h1 { margin-bottom: 30px; font-size: 2.5rem; text-shadow: 1px 1px 6px rgba(0,0,0,0.3); }
+    .card { background: #ffffff; color: #333; padding: 30px 25px; border-radius: 16px; box-shadow: 0 12px 25px rgba(0,0,0,0.15); width: 500px; max-width: 90%; text-align: center; }
+    button { padding: 14px 25px; font-size: 16px; border: none; border-radius: 10px; cursor: pointer; margin: 10px 5px; font-weight: bold; }
+    button.start { background: linear-gradient(to right, #28a745, #218838); color: #fff; }
+    button.stop { background: linear-gradient(to right, #dc3545, #c82333); color: #fff; }
+    .result { margin-top: 25px; padding: 20px; border-radius: 12px; background: #f3e5f5; color: #4a148c; text-align: left; font-size: 16px; line-height: 1.6; }
+    .result p strong { color: #6a11cb; }
+  </style>
+</head>
+<body>
+<h1>🎤 Multi-Language Speech Detector & Chatbot</h1>
+
+<div class="card">
+  <p>Select a language, then click below and speak.</p>
+  <select id="languageSelect">
+    <option value="mr-IN">Marathi</option>
+    <option value="hi-IN">Hindi</option>
+    <option value="pa-IN">Punjabi</option>
+    <option value="ta-IN">Tamil</option>
+    <option value="te-IN">Telugu</option>
+    <option value="ml-IN">Malayalam</option>
+    <option value="en-IN">English</option>
+  </select><br>
+  <button id="startBtn" class="start">Start Recording</button>
+  <button id="replayBtn" style="display:none">🔁 Replay</button>
+
+  <div class="result">
+    <p><strong>Detected Text:</strong> <span id="text">---</span></p>
+    <p><strong>Detected Language:</strong> <span id="language">---</span></p>
+    <p><strong>English Translation:</strong> <span id="english">---</span></p>
+    <p><strong>Chatbot Response:</strong> <span id="chatbot">---</span></p>
+  </div>
+</div>
+
+<audio id="ttsPlayer" style="display:none"></audio>
+
+<script>
+const startBtn = document.getElementById("startBtn");
+const replayBtn = document.getElementById("replayBtn");
+const textEl = document.getElementById("text");
+const langEl = document.getElementById("language");
+const englishEl = document.getElementById("english");
+const chatbotEl = document.getElementById("chatbot");
+const languageSelect = document.getElementById("languageSelect");
+const ttsPlayer = document.getElementById("ttsPlayer");
+
+let recognizing = false;
+let recognition;
+let lastSpokenText = "";
+let lastLangCode = "";
+let speechTimeout;
+let accumulatedTranscript = "";
+
+function speakText(text, langCode) {
+  if (!text) return;
+  lastSpokenText = text;
+  lastLangCode = langCode;
+  replayBtn.style.display = "inline-block";
+  const shortLang = langCode.split('-')[0];
+
+  if (shortLang === "en" || shortLang === "hi") {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = langCode;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  } else {
+    fetch("http://127.0.0.1:5000/tts", {
+      method: "POST",
+      body: JSON.stringify({ text: text, lang: shortLang }),
+      headers: { "Content-Type": "application/json" }
+    })
+    .then(res => res.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      ttsPlayer.src = url;
+      ttsPlayer.play();
+    });
+  }
+}
+
+replayBtn.addEventListener("click", () => speakText(lastSpokenText, lastLangCode));
+
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = true;
+
+  recognition.onstart = () => {
+    recognizing = true;
+    startBtn.textContent = "🎙️ Stop Recording";
+    startBtn.classList.remove("start");
+    startBtn.classList.add("stop");
+    accumulatedTranscript = "";
+  };
+
+  recognition.onend = () => {
+    if (recognizing) {
+      recognition.start(); // Auto-restart to catch long sentences
+    } else {
+      startBtn.textContent = "Start Recording";
+      startBtn.classList.remove("stop");
+      startBtn.classList.add("start");
+    }
+  };
+
+  recognition.onresult = (event) => {
+    let transcript = "";
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      transcript += event.results[i][0].transcript;
+    }
+    transcript = transcript.trim();
+    accumulatedTranscript = transcript;
+    textEl.textContent = transcript;
+
+    const selectedLang = languageSelect.value;
+    const langNames = {
+      "mr-IN": "Marathi",
+      "hi-IN": "Hindi",
+      "pa-IN": "Punjabi",
+      "ta-IN": "Tamil",
+      "te-IN": "Telugu",
+      "ml-IN": "Malayalam",
+      "en-IN": "English"
+    };
+    langEl.textContent = langNames[selectedLang] + ` (${selectedLang})`;
+
+    // Reset silence timer
+    clearTimeout(speechTimeout);
+    speechTimeout = setTimeout(async () => {
+      recognizing = false;
+      recognition.stop(); // stop after 2.5s silence
+
+      try {
+        // Translate to English
+        const transRes = await fetch("http://127.0.0.1:5000/translate", {
+          method: "POST",
+          body: JSON.stringify({ text: accumulatedTranscript }),
+          headers: { "Content-Type": "application/json" }
+        });
+        const transData = await transRes.json();
+        const englishText = transData.translation || "---";
+        englishEl.textContent = englishText;
+
+        // Get chatbot response
+        const chatRes = await fetch("http://127.0.0.1:5000/chat", {
+          method: "POST",
+          body: JSON.stringify({ message: englishText }),
+          headers: { "Content-Type": "application/json" }
+        });
+        const chatData = await chatRes.json();
+        const chatbotText = chatData.response || "---";
+        chatbotEl.textContent = chatbotText;
+
+        // Speak chatbot response
+        speakText(chatbotText, "en-IN");
+
+      } catch (err) {
+        console.error(err);
+      }
+    }, 2500);
+  };
+
+  startBtn.addEventListener("click", () => {
+    if (recognizing) {
+      recognizing = false;
+      recognition.stop();
+    } else {
+      recognition.lang = languageSelect.value;
+      recognizing = true;
+      recognition.start();
+    }
+  });
+} else {
+  alert("Speech Recognition not supported in this browser.");
+}
+</script>
+</body>
+</html>
