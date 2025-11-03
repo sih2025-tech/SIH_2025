@@ -61,12 +61,4 @@ By merging **hyperlocal intelligence** with **AI-driven advisories**, it acts as
 
 ---
 
-## 📎 Project Info
-**Project Name:** AgroSetu — Hyperlocal Weather Intelligence & Smart Agro Advisory  
-**Team Name:** Inferlytics  
-**Team ID:** 85127  
-**Domain:** Smart Agriculture — SIH 2025  
-
----
-
 🌱 *AgroSetu — Empowering Farmers with AI, Weather, and Insight.*
