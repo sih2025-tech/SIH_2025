@@ -1,4 +1,4 @@
-# 🌦️ AgroSetu — Hyperlocal Weather Prediction 
+# 🌦️ AgroSetu 
 
 
 ---
