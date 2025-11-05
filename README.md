@@ -1,4 +1,4 @@
-# 🌦️ AgroSetu — Hyperlocal Weather Prediction (Agro-GPT)
+# 🌦️ AgroSetu — Hyperlocal Weather Prediction 
 
 
 ---
@@ -8,12 +8,12 @@
 **Team Name:** Inferlytics  
 **Team ID:** 85127  
 **Domain:** Smart Agriculture — SIH 2025  
-# 🌦️ AgroSetu — Hyperlocal Weather Intelligence & Smart Agro Advisory (Agro-GPT)
+# 🌦️ AgroSetu — Hyperlocal Weather Intelligence & Smart Agro Advisory 
 
 ---
 
 ## 🚀 Project Overview
-**AgroSetu (Agro-GPT)** is an **AI-driven agricultural intelligence platform** that delivers **hyperlocal weather forecasts**, **crop advisories**, and **data-driven insights** to farmers.  
+**AgroSetu** is an **AI-driven agricultural intelligence platform** that delivers **hyperlocal weather forecasts**, **crop advisories**, and **data-driven insights** to farmers.  
 It bridges the gap between technology and agriculture by combining **satellite imagery, IoT sensors, and AI models** into one unified decision-support system.  
 
 While its **core USP** lies in *farm-level hyperlocal weather prediction*, AgroSetu extends far beyond — offering **personalized crop management, pest alerts, and market insights** through an **interactive web and mobile interface**.
